@@ -21,6 +21,15 @@ describe('validate middleware', () => {
     expect(res.locals.validated.body).toEqual({ seats: 2 });
   });
 
+  it('treats a missing body as {} so optional-only schemas pass', () => {
+    const req = { body: undefined } as Request;
+    const res = { locals: {} } as Response;
+    const next = vi.fn();
+    validate('body', z.object({ reason: z.string().optional() }))(req, res, next);
+    expect(next).toHaveBeenCalledWith();
+    expect(res.locals.validated.body).toEqual({});
+  });
+
   it('passes a 400 AppError with field details on invalid input', () => {
     const { next } = run({ seats: 4 });
     const err = next.mock.calls[0]?.[0];
