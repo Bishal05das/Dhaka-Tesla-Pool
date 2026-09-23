@@ -111,7 +111,10 @@ The passenger chooses the payment method per ride:
 - **TeslaPay wallet**:
   - At request time, the balance must cover the solo estimate, which is the highest possible fare.
   - At `COMPLETED`, the final fare is debited and a ledger row is written, in the same transaction.
+    The debit is `UPDATE … WHERE balance_poisha >= fare`, so a complete sent twice charges once.
   - `CHECK (balance_poisha >= 0)` is the final guard.
+  - Nothing else spends from the wallet, so the debit always succeeds in practice. If it ever couldn't,
+    the payment is recorded as cash (the driver collects it) rather than leaving the trip unfinished.
   - Top-ups are simulated.
 
 ## Cancellation
