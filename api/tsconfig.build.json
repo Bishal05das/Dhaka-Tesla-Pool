@@ -1,8 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist"
+    "rootDir": ".",
+    "outDir": "dist",
+    "sourceMap": false
   },
-  "include": ["src"]
+  // The seed is compiled too, so the production image can run it without tsx.
+  "include": ["src", "prisma/seed.ts"]
 }

@@ -1,0 +1,41 @@
+# docker compose up --build
+# Every variable has a default, so this works without a .env file.
+# Copy .env.example to .env to change ports or credentials.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tesla}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tesla}
+      POSTGRES_DB: ${POSTGRES_DB:-dhaka_tesla}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Published on localhost only, for running tests or psql from the host.
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5440}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tesla}:${POSTGRES_PASSWORD:-tesla}@db:5432/${POSTGRES_DB:-dhaka_tesla}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      SEED_ON_START: ${SEED_ON_START:-true}
+    ports:
+      - "${API_HOST_PORT:-4000}:4000"
+
+volumes:
+  db-data:
