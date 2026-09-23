@@ -136,16 +136,37 @@ The passenger chooses the payment method per ride:
 two accept calls race (double tap, two tabs). Both calls initially see one free seat. A related race: an accept
 landing at the same moment the passenger cancels.
 
-**What we do: one transaction per accept.**
+**What we do: one transaction per accept** (`acceptRequest` in `api/src/modules/driver/driver.service.ts`).
 
-1. `SELECT … FROM pools WHERE vehicle_id = $1 AND status IN ('MATCHED','DRIVER_ARRIVED') FOR UPDATE`
-   locks the Tesla's pool row. A second accept for the same Tesla waits here until the first commits, then
-   reads the updated seat count.
-2. `UPDATE ride_requests SET status = 'MATCHED' WHERE id = $1 AND status = 'REQUESTED'`. If no row is updated,
-   the request was already accepted or cancelled → `409`.
+1. `SELECT … FROM vehicles WHERE driver_id = $1 FOR UPDATE` locks the **Tesla's row**. A second accept for
+   the same Tesla waits here until the first commits, then reads the updated seat count.
+   The lock is on the vehicle rather than the pool because the vehicle row exists before the first pool does:
+   locking "the active pool" would lock nothing when two accepts race to create it.
+2. `SELECT … FROM pools WHERE id = $p FOR UPDATE` also locks the pool row, because a passenger cancelling
+   locks only the pool.
 3. `UPDATE pools SET seats_occupied = seats_occupied + $s WHERE id = $p AND seats_occupied + $s <= capacity`.
    If no row is updated → `409 CAPACITY_EXCEEDED`.
-4. Insert the `pool_members` and `ride_status_history` rows, then commit.
+4. `UPDATE ride_requests SET status = 'MATCHED' WHERE id = $1 AND status = 'REQUESTED'`. If no row is updated,
+   the passenger cancelled in the meantime → `409`, and the whole transaction (seats, new pool) rolls back.
+5. Insert the `pool_members` and `ride_status_history` rows, then commit.
+
+**Lock order** is always vehicle → pool → ride (`api/src/lib/locks.ts`). Every writer takes locks in that
+order, so two transactions can wait for each other but never deadlock.
+
+| Action | Locks |
+|---|---|
+| Driver accepts a request | vehicle → pool → ride (conditional update) |
+| Driver arrives / starts / completes / cancels | vehicle → pool → rides |
+| Driver goes offline | vehicle |
+| Passenger cancels | pool → ride (conditional update, retried if the status changed) |
+
+**Which layer stops which race** (checked by running the tests with the `FOR UPDATE`s removed):
+
+- *Nusrat vs Shirin for the last seat:* the conditional seat `UPDATE` alone already gives exactly one
+  winner. The row lock is a second layer on top.
+- *Three first accepts on an empty Tesla:* only the vehicle lock turns this into one clean `200` and two
+  `409`s. Without it, the one-active-pool index still stops a second pool, but the losing request fails as a
+  500 instead of a clear `409`.
 
 **Database guards**, which hold even if the application code has a bug:
 
@@ -153,8 +174,9 @@ landing at the same moment the passenger cancels.
 - Partial unique index allowing one active pool per vehicle, so two "first accepts" can't create two pools.
 - Partial unique index allowing one active ride request per passenger.
 
-A test runs two accepts with `Promise.all` and checks that exactly one succeeds and that `seats_occupied` equals
-the sum of the members' seats.
+`api/tests/integration/pooling.test.ts` fires the racing requests with `Promise.all` for three cases: the last
+seat, three first accepts, and cancel-vs-accept. Each checks that `seats_occupied` equals the sum of the
+active members' seats and never exceeds capacity.
 
 **At larger scale:** partition matching by route or area so locks stay local; add idempotency keys on
 accept and request; use optimistic version columns where contention is low; move matching to a worker
