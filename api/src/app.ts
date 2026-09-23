@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { driverRouter } from './modules/driver/driver.routes.js';
 import { faresRouter } from './modules/fares/fares.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { ridesRouter } from './modules/rides/rides.routes.js';
@@ -32,6 +33,7 @@ export function createApp(): Express {
   app.use('/api/stops', stopsRouter);
   app.use('/api/fares', faresRouter);
   app.use('/api/rides', ridesRouter);
+  app.use('/api/driver', driverRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
