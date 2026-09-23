@@ -1,0 +1,241 @@
+// Dhaka Tesla Pool — database schema.
+// Table-by-table rationale: docs/architecture.md. Business rules: docs/domain-rules.md.
+//
+// Constraints Prisma cannot express (CHECKs and partial unique indexes) are written by hand
+// in the migration SQL. Review every generated migration so Prisma never drops them.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  PASSENGER
+  DRIVER
+}
+
+enum RideStatus {
+  REQUESTED
+  MATCHED
+  DRIVER_ARRIVED
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum PoolStatus {
+  MATCHED
+  DRIVER_ARRIVED
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  WALLET
+}
+
+enum PaymentStatus {
+  PAID
+}
+
+enum WalletTransactionType {
+  TOPUP
+  RIDE_PAYMENT
+}
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String   @db.VarChar(80)
+  email        String   @unique @db.VarChar(254) // stored lower-cased by the service
+  passwordHash String   @map("password_hash")
+  role         Role
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  vehicle            Vehicle?
+  wallet             Wallet?
+  rideRequests       RideRequest[]       @relation("PassengerRides")
+  cancelledRides     RideRequest[]       @relation("CancelledBy")
+  walletTransactions WalletTransaction[]
+  statusChanges      RideStatusHistory[]
+
+  @@map("users")
+}
+
+// A driver's Tesla. One per driver. Capacity is fixed at sign-up (no update endpoint).
+model Vehicle {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  driverId  String   @unique @map("driver_id") @db.Uuid
+  name      String   @db.VarChar(40)
+  plate     String   @unique @db.VarChar(20)
+  capacity  Int      @db.SmallInt // CHECK 1..3 in migration
+  isOnline  Boolean  @default(false) @map("is_online")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  driver User   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  pools  Pool[]
+
+  @@map("vehicles")
+}
+
+// The single predefined route line, ordered by sequence. sequence 0 is the start stop.
+model Stop {
+  id                  Int     @id @default(autoincrement())
+  name                String  @unique @db.VarChar(40)
+  sequence            Int     @unique @db.SmallInt
+  distanceFromStartM  Int     @map("distance_from_start_m")
+  lat                 Decimal @db.Decimal(9, 6)
+  lng                 Decimal @db.Decimal(9, 6)
+
+  pickups RideRequest[] @relation("PickupStop")
+  drops   RideRequest[] @relation("DropStop")
+
+  @@map("stops")
+}
+
+// One Tesla's shared trip. seats_occupied is the counter that enforces capacity
+// (CHECK 0..capacity in migration; updated only under a row lock).
+model Pool {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vehicleId     String     @map("vehicle_id") @db.Uuid
+  status        PoolStatus @default(MATCHED)
+  capacity      Int        @db.SmallInt // copied from the vehicle when the pool is created
+  seatsOccupied Int        @default(0) @map("seats_occupied") @db.SmallInt
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  arrivedAt     DateTime?  @map("arrived_at") @db.Timestamptz(6)
+  startedAt     DateTime?  @map("started_at") @db.Timestamptz(6)
+  completedAt   DateTime?  @map("completed_at") @db.Timestamptz(6)
+  cancelledAt   DateTime?  @map("cancelled_at") @db.Timestamptz(6)
+
+  vehicle Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  members PoolMember[]
+  history RideStatusHistory[]
+
+  @@index([vehicleId, createdAt(sort: Desc)])
+  @@map("pools")
+}
+
+model RideRequest {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  passengerId   String        @map("passenger_id") @db.Uuid
+  pickupStopId  Int           @map("pickup_stop_id")
+  dropStopId    Int           @map("drop_stop_id")
+  seats         Int           @db.SmallInt // CHECK 1..3 in migration
+  status        RideStatus    @default(REQUESTED)
+  paymentMethod PaymentMethod @map("payment_method")
+  distanceM     Int           @map("distance_m")
+
+  // Shown to the passenger at request time. All money is integer poisha.
+  estSoloFarePoisha   Int @map("est_solo_fare_poisha")
+  estPooledFarePoisha Int @map("est_pooled_fare_poisha")
+
+  // Frozen when the pool starts; null until then.
+  baseFarePoisha       Int?     @map("base_fare_poisha")
+  distanceChargePoisha Int?     @map("distance_charge_poisha")
+  poolDiscountPoisha   Int?     @map("pool_discount_poisha")
+  finalFarePoisha      Int?     @map("final_fare_poisha")
+  pooled               Boolean?
+
+  cancelledById String?   @map("cancelled_by") @db.Uuid
+  cancelReason  String?   @map("cancel_reason") @db.VarChar(200)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  passenger   User                @relation("PassengerRides", fields: [passengerId], references: [id], onDelete: Restrict)
+  pickupStop  Stop                @relation("PickupStop", fields: [pickupStopId], references: [id])
+  dropStop    Stop                @relation("DropStop", fields: [dropStopId], references: [id])
+  cancelledBy User?               @relation("CancelledBy", fields: [cancelledById], references: [id])
+  membership  PoolMember?
+  payment     Payment?
+  history     RideStatusHistory[]
+  walletTxns  WalletTransaction[]
+
+  @@index([passengerId, createdAt(sort: Desc)])
+  @@index([status, createdAt]) // driver feed of open requests
+  @@map("ride_requests")
+}
+
+// Which ride request rode in which pool. left_at is set when a passenger cancels,
+// so the row stays as history instead of being deleted.
+model PoolMember {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poolId        String    @map("pool_id") @db.Uuid
+  rideRequestId String    @unique @map("ride_request_id") @db.Uuid
+  seats         Int       @db.SmallInt
+  joinedAt      DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  leftAt        DateTime? @map("left_at") @db.Timestamptz(6)
+
+  pool        Pool        @relation(fields: [poolId], references: [id], onDelete: Restrict)
+  rideRequest RideRequest @relation(fields: [rideRequestId], references: [id], onDelete: Restrict)
+
+  @@index([poolId])
+  @@map("pool_members")
+}
+
+// Append-only audit log: one row per state change of a ride request or a pool.
+model RideStatusHistory {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rideRequestId String?  @map("ride_request_id") @db.Uuid
+  poolId        String?  @map("pool_id") @db.Uuid
+  fromStatus    String?  @map("from_status") @db.VarChar(20) // null for the creating event
+  toStatus      String   @map("to_status") @db.VarChar(20)
+  actorUserId   String?  @map("actor_user_id") @db.Uuid // null when the system acted
+  reason        String?  @db.VarChar(200)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  rideRequest RideRequest? @relation(fields: [rideRequestId], references: [id], onDelete: Restrict)
+  pool        Pool?        @relation(fields: [poolId], references: [id], onDelete: Restrict)
+  actor       User?        @relation(fields: [actorUserId], references: [id])
+
+  @@index([rideRequestId, createdAt])
+  @@index([poolId, createdAt])
+  @@map("ride_status_history")
+}
+
+// Simulated TeslaPay wallet. CHECK balance >= 0 in migration.
+model Wallet {
+  userId        String   @id @map("user_id") @db.Uuid
+  balancePoisha Int      @default(0) @map("balance_poisha")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("wallets")
+}
+
+// Append-only ledger. amount is signed: + top-up, − ride payment.
+model WalletTransaction {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String                @map("user_id") @db.Uuid
+  amountPoisha       Int                   @map("amount_poisha")
+  type               WalletTransactionType
+  rideRequestId      String?               @map("ride_request_id") @db.Uuid
+  balanceAfterPoisha Int                   @map("balance_after_poisha")
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  rideRequest RideRequest? @relation(fields: [rideRequestId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("wallet_transactions")
+}
+
+model Payment {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rideRequestId String        @unique @map("ride_request_id") @db.Uuid
+  method        PaymentMethod
+  amountPoisha  Int           @map("amount_poisha")
+  status        PaymentStatus @default(PAID)
+  paidAt        DateTime      @default(now()) @map("paid_at") @db.Timestamptz(6)
+
+  rideRequest RideRequest @relation(fields: [rideRequestId], references: [id], onDelete: Restrict)
+
+  @@map("payments")
+}
