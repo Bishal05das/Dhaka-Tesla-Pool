@@ -1,5 +1,6 @@
+import { assertPoolTransition, assertRideTransition } from '../../domain/rideStateMachine.js';
 import { conflict, notFound } from '../../lib/errors.js';
-import { prisma } from '../../lib/prisma.js';
+import { prisma, type Tx } from '../../lib/prisma.js';
 import { violatedUniqueIndex } from '../../lib/prismaErrors.js';
 import { quoteTrip } from '../fares/fares.service.js';
 import {
@@ -63,6 +64,87 @@ export async function listRides(passengerId: string) {
     take: 50,
   });
   return rides.map(presentRide);
+}
+
+// A passenger may cancel before the trip starts. If they were already in a pool, their seats
+// go back to the Tesla, and a pool left with nobody in it is cancelled too.
+//
+// Concurrency: the driver may be accepting this ride, or moving the pool along, at the same
+// moment. Every writer that touches both locks the pool row first and the ride second, so they
+// can't deadlock. The ride is changed with a conditional UPDATE on the status we just read; if
+// someone else changed it in between, nothing is written and we re-read and try again.
+export async function cancelRide(passengerId: string, rideId: string, reason?: string) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const done = await prisma.$transaction(async (tx) => {
+      let ride = await tx.rideRequest.findFirst({
+        where: { id: rideId, passengerId },
+        select: { status: true, membership: { select: { poolId: true, seats: true, leftAt: true } } },
+      });
+      if (!ride) throw notFound('Ride not found');
+
+      const member = ride.membership && !ride.membership.leftAt ? ride.membership : null;
+      if (member) {
+        await lockPool(tx, member.poolId);
+        // Under the pool lock no pool action can move this ride, so re-read its status.
+        ride = await tx.rideRequest.findUniqueOrThrow({
+          where: { id: rideId },
+          select: { status: true, membership: { select: { poolId: true, seats: true, leftAt: true } } },
+        });
+      }
+
+      assertRideTransition(ride.status, 'CANCELLED');
+
+      const { count } = await tx.rideRequest.updateMany({
+        where: { id: rideId, status: ride.status },
+        data: { status: 'CANCELLED', cancelledById: passengerId, cancelReason: reason ?? null },
+      });
+      if (count === 0) return false; // changed under us: retry with a fresh read
+
+      await tx.rideStatusHistory.create({
+        data: {
+          rideRequestId: rideId,
+          poolId: member?.poolId ?? null,
+          fromStatus: ride.status,
+          toStatus: 'CANCELLED',
+          actorUserId: passengerId,
+          reason: reason ?? null,
+        },
+      });
+
+      if (member) await leavePool(tx, rideId, member.poolId, member.seats);
+      return true;
+    });
+    if (done) return getRide(passengerId, rideId);
+  }
+  throw conflict('CONFLICT', 'Your ride changed while cancelling. Please try again.');
+}
+
+// SELECT … FOR UPDATE: blocks every other writer of this pool until our transaction ends.
+async function lockPool(tx: Tx, poolId: string) {
+  await tx.$queryRaw`SELECT id FROM pools WHERE id = ${poolId}::uuid FOR UPDATE`;
+}
+
+// Caller must hold the pool lock.
+async function leavePool(tx: Tx, rideId: string, poolId: string, seats: number) {
+  await tx.poolMember.update({ where: { rideRequestId: rideId }, data: { leftAt: new Date() } });
+  const pool = await tx.pool.update({
+    where: { id: poolId },
+    data: { seatsOccupied: { decrement: seats } },
+    select: { status: true, _count: { select: { members: { where: { leftAt: null } } } } },
+  });
+
+  if (pool._count.members === 0) {
+    assertPoolTransition(pool.status, 'CANCELLED');
+    await tx.pool.update({ where: { id: poolId }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
+    await tx.rideStatusHistory.create({
+      data: {
+        poolId,
+        fromStatus: pool.status,
+        toStatus: 'CANCELLED',
+        reason: 'Every passenger cancelled',
+      },
+    });
+  }
 }
 
 // Another passenger's ride answers 404, not 403, so ride ids can't be probed.
