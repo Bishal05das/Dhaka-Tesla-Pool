@@ -1,4 +1,4 @@
-import { JOINABLE_POOL_STATUSES } from '../../domain/rideStateMachine.js';
+import { seatsFree } from '../../domain/matching.js';
 import type { PoolStatus } from '../../generated/prisma/enums.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import { lockVehicleOfDriver } from '../../lib/locks.js';
@@ -43,20 +43,17 @@ export async function listOpenRequests(driverId: string) {
   const vehicle = await getVehicle(driverId);
   const pool = await findActivePool(prisma, vehicle.id);
 
-  let seatsFree = vehicle.capacity;
-  if (pool) {
-    seatsFree = JOINABLE_POOL_STATUSES.includes(pool.status) ? pool.capacity - pool.seatsOccupied : 0;
-  }
+  const free = seatsFree(pool, vehicle.capacity);
 
   const requests =
-    seatsFree === 0
+    free === 0
       ? []
       : await prisma.rideRequest.findMany({
-          where: { status: 'REQUESTED', seats: { lte: seatsFree } },
+          where: { status: 'REQUESTED', seats: { lte: free } },
           select: openRequestSelect,
           orderBy: { createdAt: 'asc' },
           take: 20,
         });
 
-  return { isOnline: vehicle.isOnline, seatsFree, requests: requests.map(presentOpenRequest) };
+  return { isOnline: vehicle.isOnline, seatsFree: free, requests: requests.map(presentOpenRequest) };
 }
