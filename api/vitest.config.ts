@@ -1,9 +1,13 @@
 import { defineConfig } from 'vitest/config';
+import { TEST_DATABASE_URL } from './tests/testDatabase.js';
 
 export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    env: { NODE_ENV: 'test' },
+    globalSetup: ['tests/globalSetup.ts'],
+    env: { NODE_ENV: 'test', DATABASE_URL: TEST_DATABASE_URL },
+    // Integration tests share one database, so test files run one at a time.
+    fileParallelism: false,
   },
 });
