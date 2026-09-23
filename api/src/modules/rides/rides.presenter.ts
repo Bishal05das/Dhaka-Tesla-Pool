@@ -5,6 +5,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 export const passengerRideInclude = {
   pickupStop: { select: { id: true, name: true } },
   dropStop: { select: { id: true, name: true } },
+  payment: { select: { method: true, amountPoisha: true, paidAt: true } },
   membership: {
     select: {
       pool: {
@@ -51,6 +52,7 @@ export function presentRide(ride: RideRow) {
             totalPoisha: ride.finalFarePoisha,
             pooled: ride.pooled,
           },
+    payment: ride.payment,
     tesla: pool
       ? {
           driverName: pool.vehicle.driver.name,

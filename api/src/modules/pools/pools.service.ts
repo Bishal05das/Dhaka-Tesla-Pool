@@ -3,11 +3,12 @@
 // Tesla's.
 import { calculateFare } from '../../domain/fare.js';
 import { assertPoolTransition, assertRideTransition } from '../../domain/rideStateMachine.js';
-import type { PoolStatus, RideStatus } from '../../generated/prisma/enums.js';
+import type { PaymentMethod, PoolStatus, RideStatus } from '../../generated/prisma/enums.js';
 import { notFound } from '../../lib/errors.js';
 import { lockPool, lockVehicleOfDriver } from '../../lib/locks.js';
-import { prisma } from '../../lib/prisma.js';
+import { prisma, type Tx } from '../../lib/prisma.js';
 import { driverPoolInclude, presentPool } from '../driver/driver.presenter.js';
+import { tryDebitForRide } from '../wallet/wallet.service.js';
 
 type PoolAction = 'arrive' | 'start' | 'complete' | 'cancel';
 
@@ -64,10 +65,30 @@ export async function advancePool(driverId: string, poolId: string, action: Pool
           reason: action === 'cancel' ? (reason ?? 'Cancelled by the driver') : null,
         },
       });
+
+      if (action === 'complete') await settleFare(tx, ride);
     }
 
     return presentPool(await tx.pool.findUniqueOrThrow({ where: { id: poolId }, include: driverPoolInclude }));
   });
+}
+
+// Charges the fare frozen at the start, inside the same transaction as completing the trip:
+// either the trip completes and everyone is charged, or neither happens.
+async function settleFare(
+  tx: Tx,
+  ride: { id: string; passengerId: string; paymentMethod: PaymentMethod; finalFarePoisha: number | null },
+) {
+  if (ride.finalFarePoisha === null) throw new Error(`Ride ${ride.id} completed without a frozen fare`);
+
+  let method = ride.paymentMethod;
+  // The balance was checked against the solo fare at request time and nothing else spends
+  // from the wallet, so this should always succeed. If it ever doesn't, Jashim collects cash
+  // rather than the trip being stuck unfinished.
+  if (method === 'WALLET' && !(await tryDebitForRide(tx, ride.passengerId, ride.id, ride.finalFarePoisha))) {
+    method = 'CASH';
+  }
+  await tx.payment.create({ data: { rideRequestId: ride.id, method, amountPoisha: ride.finalFarePoisha } });
 }
 
 function freezeFare(distanceM: number, seats: number, pooled: boolean) {
