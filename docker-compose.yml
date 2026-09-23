@@ -33,6 +33,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: postgresql://${POSTGRES_USER:-tesla}:${POSTGRES_PASSWORD:-tesla}@db:5432/${POSTGRES_DB:-dhaka_tesla}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      # The default is for running the demo locally only; set a real one in .env for anything shared.
+      JWT_SECRET: ${JWT_SECRET:-local-compose-demo-secret-change-me-0123456789}
+      JWT_TTL_HOURS: ${JWT_TTL_HOURS:-12}
+      # Compose serves plain http, where browsers drop Secure cookies.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-20}
       SEED_ON_START: ${SEED_ON_START:-true}
     ports:
       - "${API_HOST_PORT:-4000}:4000"
