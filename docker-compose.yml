@@ -38,6 +38,7 @@ services:
       JWT_TTL_HOURS: ${JWT_TTL_HOURS:-12}
       # Compose serves plain http, where browsers drop Secure cookies.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-20}
       SEED_ON_START: ${SEED_ON_START:-true}
     ports:
       - "${API_HOST_PORT:-4000}:4000"

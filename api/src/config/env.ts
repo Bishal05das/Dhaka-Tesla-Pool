@@ -21,6 +21,8 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true')),
+  // Sign-up + login attempts allowed per IP per 15 minutes.
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   // Comma-separated list of browser origins allowed to call the API directly.
   CORS_ORIGIN: z
