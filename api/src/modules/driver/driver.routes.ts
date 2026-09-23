@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
+import { listDriverHistory } from '../pools/pools.service.js';
 import * as driver from './driver.service.js';
 
 export const driverRouter = Router();
@@ -28,4 +29,8 @@ driverRouter.post('/requests/:id/accept', validate('params', rideIdParams), asyn
 
 driverRouter.get('/pool', async (_req, res) => {
   res.json({ pool: await driver.getCurrentPool(res.locals.user.id) });
+});
+
+driverRouter.get('/history', async (_req, res) => {
+  res.json({ trips: await listDriverHistory(res.locals.user.id) });
 });
