@@ -9,6 +9,7 @@ import { authRouter } from './modules/auth/auth.routes.js';
 import { driverRouter } from './modules/driver/driver.routes.js';
 import { faresRouter } from './modules/fares/fares.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
+import { poolsRouter } from './modules/pools/pools.routes.js';
 import { ridesRouter } from './modules/rides/rides.routes.js';
 import { stopsRouter } from './modules/stops/stops.routes.js';
 
@@ -34,6 +35,7 @@ export function createApp(): Express {
   app.use('/api/fares', faresRouter);
   app.use('/api/rides', ridesRouter);
   app.use('/api/driver', driverRouter);
+  app.use('/api/pools', poolsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
