@@ -39,6 +39,9 @@ npm run dev                      # http://localhost:4000
 npm test
 ```
 
+`npm test` needs the compose Postgres running. It creates and migrates a separate `dhaka_tesla_test`
+database on first run and never touches the demo data.
+
 ## Contents (planned)
 
 - Summary, problem statement, features, screenshots
