@@ -1,5 +1,6 @@
 import { assertPoolTransition, assertRideTransition } from '../../domain/rideStateMachine.js';
 import { conflict, notFound } from '../../lib/errors.js';
+import { lockPool } from '../../lib/locks.js';
 import { prisma, type Tx } from '../../lib/prisma.js';
 import { violatedUniqueIndex } from '../../lib/prismaErrors.js';
 import { quoteTrip } from '../fares/fares.service.js';
@@ -117,11 +118,6 @@ export async function cancelRide(passengerId: string, rideId: string, reason?: s
     if (done) return getRide(passengerId, rideId);
   }
   throw conflict('CONFLICT', 'Your ride changed while cancelling. Please try again.');
-}
-
-// SELECT … FOR UPDATE: blocks every other writer of this pool until our transaction ends.
-async function lockPool(tx: Tx, poolId: string) {
-  await tx.$queryRaw`SELECT id FROM pools WHERE id = ${poolId}::uuid FOR UPDATE`;
 }
 
 // Caller must hold the pool lock.

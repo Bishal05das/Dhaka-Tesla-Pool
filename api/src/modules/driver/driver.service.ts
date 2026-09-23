@@ -1,6 +1,7 @@
 import { JOINABLE_POOL_STATUSES } from '../../domain/rideStateMachine.js';
 import type { PoolStatus } from '../../generated/prisma/enums.js';
 import { conflict, notFound } from '../../lib/errors.js';
+import { lockVehicleOfDriver } from '../../lib/locks.js';
 import { prisma, type Tx } from '../../lib/prisma.js';
 import { driverPoolInclude, openRequestSelect, presentOpenRequest, presentPool } from './driver.presenter.js';
 
@@ -12,16 +13,6 @@ export async function getVehicle(driverId: string, db: Tx | typeof prisma = pris
   return vehicle;
 }
 
-// SELECT … FOR UPDATE on the Tesla's row. It exists before any pool does, so it is the one lock
-// that serialises everything that changes this Tesla's trips: accepting (including creating the
-// first pool), going offline, and pool actions. Lock order is always vehicle → pool → ride.
-export async function lockVehicle(tx: Tx, driverId: string) {
-  const [vehicle] = await tx.$queryRaw<{ id: string; capacity: number; is_online: boolean }[]>`
-    SELECT id, capacity, is_online FROM vehicles WHERE driver_id = ${driverId}::uuid FOR UPDATE`;
-  if (!vehicle) throw notFound('No Tesla registered for this driver');
-  return { id: vehicle.id, capacity: vehicle.capacity, isOnline: vehicle.is_online };
-}
-
 export function findActivePool(db: Tx | typeof prisma, vehicleId: string) {
   return db.pool.findFirst({
     where: { vehicleId, status: { in: ACTIVE_POOL_STATUSES } },
@@ -31,7 +22,7 @@ export function findActivePool(db: Tx | typeof prisma, vehicleId: string) {
 
 export async function setOnline(driverId: string, online: boolean) {
   return prisma.$transaction(async (tx) => {
-    const vehicle = await lockVehicle(tx, driverId);
+    const vehicle = await lockVehicleOfDriver(tx, driverId);
     if (!online && (await findActivePool(tx, vehicle.id))) {
       throw conflict('CONFLICT', 'Finish or cancel your current trip before going offline');
     }
