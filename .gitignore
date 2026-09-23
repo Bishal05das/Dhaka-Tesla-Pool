@@ -9,7 +9,7 @@ build/
 *.tsbuildinfo
 
 # generated prisma client
-src/generated/
+api/src/generated/
 
 # env / secrets
 .env
