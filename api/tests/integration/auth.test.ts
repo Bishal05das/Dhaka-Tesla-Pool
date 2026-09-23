@@ -57,6 +57,62 @@ describe('passenger sign-up', () => {
   });
 });
 
+const newDriver = {
+  role: 'DRIVER',
+  name: 'Kamal',
+  email: 'kamal@dhakatesla.test',
+  password: 'gulshan-circle-1',
+  vehicle: { name: 'Thunder', plate: ' dhaka-tesla-22 ', capacity: 2 },
+};
+
+describe('driver sign-up', () => {
+  it('creates the driver and their Tesla together, offline and without a wallet', async () => {
+    const agent = request.agent(app);
+    const res = await agent.post('/api/auth/register').send(newDriver);
+
+    expect(res.status).toBe(201);
+    expect(res.body.user).toMatchObject({
+      role: 'DRIVER',
+      vehicle: { name: 'Thunder', plate: 'DHAKA-TESLA-22', capacity: 2, isOnline: false },
+    });
+    expect(await prisma.wallet.count({ where: { userId: res.body.user.id } })).toBe(0);
+    expect((await agent.get('/api/auth/me')).body.user.vehicle.name).toBe('Thunder');
+  });
+
+  it('requires the Tesla details', async () => {
+    const { vehicle: _omit, ...withoutVehicle } = newDriver;
+    const res = await request(app).post('/api/auth/register').send(withoutVehicle);
+    expect(res.status).toBe(400);
+    expect(res.body.error.details).toHaveProperty('vehicle');
+  });
+
+  it.each([0, 4])('rejects a capacity of %i seats', async (capacity) => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ ...newDriver, vehicle: { ...newDriver.vehicle, capacity } });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects Bullet's plate in any case, and creates nothing", async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ ...newDriver, vehicle: { ...newDriver.vehicle, plate: 'dhaka-tesla-11' } });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).toMatch(/plate/);
+    // The user insert rolled back with the vehicle insert.
+    expect(await prisma.user.count({ where: { email: newDriver.email } })).toBe(0);
+  });
+
+  it('ignores extra fields like a vehicle on a passenger sign-up', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ ...newPassenger, vehicle: newDriver.vehicle });
+    expect(res.status).toBe(201);
+    expect(res.body.user.vehicle).toBeNull();
+  });
+});
+
 describe('login and logout', () => {
   it('signs Nusrat in with the demo password', async () => {
     const res = await request(app)
