@@ -8,7 +8,9 @@ type Part = 'body' | 'query' | 'params';
 // so handlers never touch unvalidated input. (Express 5 makes req.query read-only.)
 export function validate(part: Part, schema: z.ZodType): RequestHandler {
   return (req, res, next) => {
-    const result = schema.safeParse(req[part]);
+    // Express 5 leaves req.body undefined when a request has no body (e.g. a bare
+    // POST /api/pools/:id/arrive); treat that as {} so all-optional bodies still validate.
+    const result = schema.safeParse(req[part] ?? {});
     if (!result.success) {
       next(badRequest('Invalid request', z.flattenError(result.error).fieldErrors));
       return;

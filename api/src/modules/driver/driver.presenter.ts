@@ -16,6 +16,7 @@ export const driverPoolInclude = {
           estSoloFarePoisha: true,
           estPooledFarePoisha: true,
           finalFarePoisha: true,
+          payment: { select: { method: true, amountPoisha: true } },
           passenger: { select: { name: true } },
           dropStop: { select: { id: true, name: true, sequence: true } },
         },
@@ -49,6 +50,8 @@ export function presentPool(pool: PoolRow) {
         status: m.rideRequest.status,
         paymentMethod: m.rideRequest.paymentMethod,
         farePoisha: m.rideRequest.finalFarePoisha,
+        // After completion: how this passenger actually paid (CASH = Jashim collects it).
+        paidBy: m.rideRequest.payment?.method ?? null,
         joinedAt: m.joinedAt,
       }))
       .sort((a, b) => a.dropSequence - b.dropSequence)

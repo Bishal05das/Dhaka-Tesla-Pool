@@ -12,6 +12,7 @@ import { healthRouter } from './modules/health/health.routes.js';
 import { poolsRouter } from './modules/pools/pools.routes.js';
 import { ridesRouter } from './modules/rides/rides.routes.js';
 import { stopsRouter } from './modules/stops/stops.routes.js';
+import { walletRouter } from './modules/wallet/wallet.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -36,6 +37,7 @@ export function createApp(): Express {
   app.use('/api/rides', ridesRouter);
   app.use('/api/driver', driverRouter);
   app.use('/api/pools', poolsRouter);
+  app.use('/api/wallet', walletRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
