@@ -5,10 +5,10 @@ import { createApp } from '../../src/app.js';
 const app = createApp();
 
 describe('app shell', () => {
-  it('reports health', async () => {
+  it('reports health including the database', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
+    expect(res.body).toEqual({ status: 'ok', db: 'ok' });
   });
 
   it('returns a request id on every response', async () => {

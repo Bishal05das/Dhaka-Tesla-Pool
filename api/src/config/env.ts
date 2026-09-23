@@ -1,8 +1,18 @@
 import { z } from 'zod';
 
+// Local development reads api/.env. Variables already set (Docker, Render) are never overridden.
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    process.loadEnvFile();
+  } catch {
+    // no .env file — fine
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
+  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   // Comma-separated list of browser origins allowed to call the API directly.
   CORS_ORIGIN: z
