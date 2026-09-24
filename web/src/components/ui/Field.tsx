@@ -1,7 +1,7 @@
 import { type InputHTMLAttributes, type SelectHTMLAttributes, useId } from 'react';
 
 const inputClass =
-  'mt-1 block w-full rounded-lg border-0 px-3 py-2 text-slate-900 ring-1 ring-slate-300 focus:ring-2 focus:ring-emerald-600 aria-[invalid=true]:ring-red-400';
+  'mt-1.5 block w-full rounded-xl border-0 bg-white px-3.5 py-2.5 text-slate-900 shadow-sm ring-1 ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-600 focus:outline-none aria-[invalid=true]:ring-red-400';
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;

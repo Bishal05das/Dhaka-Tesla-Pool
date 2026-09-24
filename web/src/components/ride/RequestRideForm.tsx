@@ -1,56 +1,55 @@
 'use client';
 
+import { ArrowRight, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useEffect, useState } from 'react';
+import { RouteLine } from '@/components/route/RouteLine';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { SelectField } from '@/components/ui/Field';
-import { PageLoading } from '@/components/ui/Spinner';
-import { useApi } from '@/hooks/useApi';
+import { Segmented } from '@/components/ui/Segmented';
 import { api, ApiError } from '@/lib/api';
 import { km, taka } from '@/lib/format';
-import type { FareQuote, PaymentMethod, Ride, Stop, Wallet } from '@/lib/types';
+import type { FareQuote, PaymentMethod, Ride, Stop } from '@/lib/types';
 
-export function RequestRideForm({ onRequested }: { onRequested: (ride: Ride) => void }) {
-  const stops = useApi<{ stops: Stop[] }>('/stops');
-  const wallet = useApi<Wallet>('/wallet');
+interface Props {
+  stops: Stop[];
+  balancePoisha?: number;
+  onRequested: (ride: Ride) => void;
+}
 
-  const [dropId, setDropId] = useState<number | null>(null);
+export function RequestRideForm({ stops, balancePoisha, onRequested }: Props) {
+  const pickup = stops[0]!;
+  const drops = stops.slice(1);
+
+  const [dropId, setDropId] = useState<number>(drops[0]?.id ?? 0);
   const [seats, setSeats] = useState(1);
   const [payment, setPayment] = useState<PaymentMethod>('CASH');
   const [quote, setQuote] = useState<{ key: string; value?: FareQuote; error?: ApiError } | null>(null);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const line = stops.data?.stops ?? [];
-  const pickup = line[0];
-  const drops = line.slice(1);
-  const drop = dropId ?? drops[0]?.id ?? null;
-  const quoteKey = `${pickup?.id}-${drop}-${seats}`;
+  const quoteKey = `${pickup.id}-${dropId}-${seats}`;
 
   // Re-price whenever the trip changes. The server does the maths, so what is shown here is
   // exactly what gets stored with the ride.
   useEffect(() => {
-    if (!pickup || drop === null) return;
     let active = true;
-    api<FareQuote>('/fares/estimate', { method: 'POST', body: { pickupStopId: pickup.id, dropStopId: drop, seats } })
+    api<FareQuote>('/fares/estimate', { method: 'POST', body: { pickupStopId: pickup.id, dropStopId: dropId, seats } })
       .then((value) => active && setQuote({ key: quoteKey, value }))
       .catch((error: ApiError) => active && setQuote({ key: quoteKey, error }));
     return () => {
       active = false;
     };
-  }, [pickup, drop, seats, quoteKey]);
+  }, [pickup.id, dropId, seats, quoteKey]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!pickup || drop === null) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
       const { ride } = await api<{ ride: Ride }>('/rides', {
         method: 'POST',
-        body: { pickupStopId: pickup.id, dropStopId: drop, seats, paymentMethod: payment },
+        body: { pickupStopId: pickup.id, dropStopId: dropId, seats, paymentMethod: payment },
       });
       onRequested(ride);
     } catch (err) {
@@ -59,82 +58,71 @@ export function RequestRideForm({ onRequested }: { onRequested: (ride: Ride) => 
     }
   }
 
-  if (stops.loading) return <PageLoading label="Loading the route…" />;
-  if (stops.error || !pickup) {
-    return <Alert>{stops.error?.message ?? 'The route is not set up yet.'}</Alert>;
-  }
-
   const current = quote?.key === quoteKey ? quote : null;
-  const balance = wallet.data?.balancePoisha;
 
   return (
-    <Card title="Where to?">
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div>
-          <span className="block text-sm font-medium text-slate-700">Pickup</span>
-          <p className="mt-1 rounded-lg bg-slate-100 px-3 py-2 text-slate-800">{pickup.name}</p>
-          <p className="mt-1 text-sm text-slate-500">Every Tesla starts from {pickup.name} and runs along one line.</p>
+    <Card title="Book a seat" subtitle={`Every Tesla starts at ${pickup.name} and runs one line.`} icon={MapPin}>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <RouteLine stops={stops} pickupId={pickup.id} dropId={dropId} />
+
+        <Segmented
+          label="Where are you getting off?"
+          value={dropId}
+          onChange={setDropId}
+          columns="grid-cols-2 sm:grid-cols-4"
+          options={drops.map((s) => ({
+            value: s.id,
+            label: s.name,
+            hint: km(s.distanceFromStartM - pickup.distanceFromStartM),
+          }))}
+        />
+
+        <div className="grid gap-6 sm:grid-cols-2">
+          <Segmented
+            label="Seats"
+            value={seats}
+            onChange={setSeats}
+            options={[1, 2, 3].map((n) => ({ value: n, label: String(n) }))}
+          />
+          <Segmented
+            label="Pay with"
+            value={payment}
+            onChange={setPayment}
+            options={[
+              { value: 'CASH' as const, label: 'Cash', hint: 'Pay the driver' },
+              {
+                value: 'WALLET' as const,
+                label: 'TeslaPay',
+                hint: balancePoisha !== undefined ? taka(balancePoisha) : undefined,
+              },
+            ]}
+          />
         </div>
-
-        <SelectField label="Drop-off" value={drop ?? ''} onChange={(e) => setDropId(Number(e.target.value))}>
-          {drops.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} ({km(s.distanceFromStartM - pickup.distanceFromStartM)})
-            </option>
-          ))}
-        </SelectField>
-
-        <SelectField label="Seats" value={seats} onChange={(e) => setSeats(Number(e.target.value))}>
-          <option value={1}>1 seat</option>
-          <option value={2}>2 seats</option>
-          <option value={3}>3 seats</option>
-        </SelectField>
-
-        <fieldset>
-          <legend className="text-sm font-medium text-slate-700">Pay with</legend>
-          <div className="mt-1 grid grid-cols-2 gap-2">
-            {(['CASH', 'WALLET'] as const).map((method) => (
-              <label
-                key={method}
-                className={`cursor-pointer rounded-lg px-3 py-2 text-sm ring-1 ${
-                  payment === method ? 'bg-emerald-50 ring-emerald-600' : 'bg-white ring-slate-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="payment"
-                  value={method}
-                  checked={payment === method}
-                  onChange={() => setPayment(method)}
-                  className="sr-only"
-                />
-                <span className="font-semibold">{method === 'CASH' ? 'Cash' : 'TeslaPay'}</span>
-                {method === 'WALLET' && balance !== undefined && (
-                  <span className="block text-slate-500">Balance {taka(balance)}</span>
-                )}
-              </label>
-            ))}
-          </div>
-        </fieldset>
 
         <FareBox quote={current} />
 
         {submitError && (
-          <Alert>
-            {submitError.message}
-            {submitError.code === 'INSUFFICIENT_BALANCE' && (
-              <>
-                {' '}
-                <Link href="/passenger/wallet" className="font-semibold underline">
-                  Top up TeslaPay
-                </Link>
-              </>
-            )}
+          <Alert tone={submitError.code === 'NO_TESLA_AVAILABLE' ? 'warning' : 'error'}>
+            <p className="font-semibold">
+              {submitError.code === 'NO_TESLA_AVAILABLE' ? "Can't book right now" : 'Request not sent'}
+            </p>
+            <p>
+              {submitError.message}
+              {submitError.code === 'INSUFFICIENT_BALANCE' && (
+                <>
+                  {' '}
+                  <Link href="/passenger/wallet" className="font-semibold underline">
+                    Top up TeslaPay
+                  </Link>
+                </>
+              )}
+            </p>
           </Alert>
         )}
 
-        <Button type="submit" loading={submitting} disabled={!current?.value} className="w-full">
-          Request a seat
+        <Button type="submit" size="lg" loading={submitting} disabled={!current?.value} className="w-full">
+          Request a seat to {drops.find((d) => d.id === dropId)?.name}
+          <ArrowRight className="h-4 w-4" />
         </Button>
       </form>
     </Card>
@@ -143,23 +131,26 @@ export function RequestRideForm({ onRequested }: { onRequested: (ride: Ride) => 
 
 function FareBox({ quote }: { quote: { value?: FareQuote; error?: ApiError } | null }) {
   if (!quote) {
-    return <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">Working out the fare…</p>;
+    return <div className="h-[104px] animate-pulse rounded-xl bg-slate-100" aria-label="Working out the fare" />;
   }
   if (quote.error) return <Alert>{quote.error.message}</Alert>;
   const { solo, pooled } = quote.value!.estimate;
   return (
-    <div className="rounded-lg bg-slate-50 px-3 py-3 ring-1 ring-slate-200">
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm text-slate-600">If you share the Tesla</span>
-        <span className="text-xl font-bold text-emerald-700">{taka(pooled.totalPoisha)}</span>
+    <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200">
+      <div className="bg-emerald-50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Shared Tesla</p>
+        <p className="mt-1 text-3xl font-bold tracking-tight text-emerald-800">{taka(pooled.totalPoisha)}</p>
+        <p className="text-xs text-emerald-700">25% off the distance part</p>
       </div>
-      <div className="mt-1 flex items-baseline justify-between text-sm text-slate-600">
-        <span>If you ride alone</span>
-        <span>{taka(solo.totalPoisha)}</span>
+      <div className="p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Riding alone</p>
+        <p className="mt-1 text-3xl font-bold tracking-tight text-slate-700">{taka(solo.totalPoisha)}</p>
+        <p className="text-xs text-slate-500">
+          {taka(solo.basePoisha)} base + {taka(solo.distanceChargePoisha)} distance
+        </p>
       </div>
-      <p className="mt-2 text-xs text-slate-500">
-        {taka(solo.basePoisha)} base + {taka(solo.distanceChargePoisha)} distance. Sharing takes 25% off the
-        distance part. Your fare is fixed when the Tesla starts: shared if anyone else is aboard then.
+      <p className="col-span-2 border-t border-slate-200 bg-white px-4 py-2 text-xs text-slate-500">
+        Your fare is fixed when the Tesla starts: shared if anyone else is aboard then.
       </p>
     </div>
   );

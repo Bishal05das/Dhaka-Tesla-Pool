@@ -1,10 +1,9 @@
 'use client';
 
+import { Power } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { api, ApiError } from '@/lib/api';
 
 export function OnlineToggle({ isOnline, onChanged }: { isOnline: boolean; onChanged: () => void }) {
@@ -28,26 +27,38 @@ export function OnlineToggle({ isOnline, onChanged }: { isOnline: boolean; onCha
   }
 
   return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section
+      className={`rounded-2xl p-5 text-white shadow-sm transition-colors ${
+        isOnline ? 'bg-linear-to-br from-emerald-600 to-teal-800' : 'bg-slate-800'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="font-semibold">
-            {tesla?.name ?? 'Your Tesla'} <span className="font-normal text-slate-500">{tesla?.plate}</span>
-          </p>
-          <p className="flex items-center gap-2 text-sm">
-            <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-            {isOnline ? 'Online: you can accept passengers' : 'Offline: passengers wait for you to go online'}
+          <p className="text-sm text-white/70">{tesla ? `${tesla.name} · ${tesla.plate}` : 'Your Tesla'}</p>
+          <p className="mt-0.5 text-xl font-bold">{isOnline ? "You're online" : "You're offline"}</p>
+          <p className="mt-1 text-sm text-white/80">
+            {isOnline ? 'Passengers can book, and you can accept them.' : 'Go online to take passengers.'}
           </p>
         </div>
-        <Button variant={isOnline ? 'secondary' : 'primary'} loading={busy} onClick={toggle}>
-          {isOnline ? 'Go offline' : 'Go online'}
-        </Button>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={busy}
+          role="switch"
+          aria-checked={isOnline}
+          aria-label={isOnline ? 'Go offline' : 'Go online'}
+          className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-4 transition disabled:opacity-60 ${
+            isOnline ? 'bg-white text-emerald-700 ring-white/30' : 'bg-emerald-500 text-white ring-emerald-500/30 hover:bg-emerald-400'
+          }`}
+        >
+          <Power className="h-6 w-6" />
+        </button>
       </div>
       {error && (
-        <div className="mt-3">
+        <div className="mt-3 text-slate-900">
           <Alert>{error.message}</Alert>
         </div>
       )}
-    </Card>
+    </section>
   );
 }

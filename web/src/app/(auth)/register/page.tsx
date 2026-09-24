@@ -6,7 +6,6 @@ import { type FormEvent, useState } from 'react';
 import { homeFor, useAuth } from '@/components/auth/AuthProvider';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Field, SelectField } from '@/components/ui/Field';
 import { api, ApiError } from '@/lib/api';
 import type { Role, User } from '@/lib/types';
@@ -43,8 +42,10 @@ export default function RegisterPage() {
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   return (
-    <Card title="Create an account">
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+    <>
+      <h1 className="text-2xl font-bold tracking-tight text-slate-900">Create your account</h1>
+      <p className="mt-1 text-slate-500">Ride along the Banani line, or put your own Tesla on it.</p>
+      <form onSubmit={onSubmit} className="mt-8 space-y-5" noValidate>
         <fieldset>
           <legend className="text-sm font-medium text-slate-700">I want to</legend>
           <div className="mt-1 grid grid-cols-2 gap-2">
@@ -59,7 +60,7 @@ export default function RegisterPage() {
                 type="button"
                 aria-pressed={role === value}
                 onClick={() => setRole(value)}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold ring-1 ${
+                className={`rounded-xl px-3 py-2.5 text-sm font-semibold ring-1 ${
                   role === value ? 'bg-emerald-600 text-white ring-emerald-600' : 'bg-white ring-slate-300'
                 }`}
               >
@@ -91,7 +92,7 @@ export default function RegisterPage() {
         />
 
         {role === 'DRIVER' && (
-          <fieldset className="space-y-4 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+          <fieldset className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
             <legend className="px-1 text-sm font-semibold">Your Tesla</legend>
             {fieldErrors.vehicle && <Alert>{fieldErrors.vehicle.join(' ')}</Alert>}
             <Field
@@ -119,16 +120,16 @@ export default function RegisterPage() {
           </fieldset>
         )}
 
-        <Button type="submit" loading={submitting} className="w-full">
+        <Button type="submit" size="lg" loading={submitting} className="w-full">
           Create account
         </Button>
       </form>
-      <p className="mt-4 text-center text-sm text-slate-600">
+      <p className="mt-6 text-center text-sm text-slate-600">
         Already have an account?{' '}
         <Link href="/login" className="font-semibold text-emerald-700 hover:underline">
           Sign in
         </Link>
       </p>
-    </Card>
+    </>
   );
 }

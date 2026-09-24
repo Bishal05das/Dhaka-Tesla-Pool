@@ -1,3 +1,5 @@
+import { Armchair } from 'lucide-react';
+
 // Bullet's seats at a glance: filled = taken.
 export function SeatMeter({ capacity, occupied }: { capacity: number; occupied: number }) {
   return (
@@ -6,12 +8,16 @@ export function SeatMeter({ capacity, occupied }: { capacity: number; occupied: 
         {Array.from({ length: capacity }, (_, i) => (
           <span
             key={i}
-            className={`h-6 w-6 rounded-md ring-1 ${i < occupied ? 'bg-emerald-600 ring-emerald-600' : 'bg-white ring-slate-300'}`}
-          />
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${
+              i < occupied ? 'bg-emerald-600 text-white' : 'border border-dashed border-slate-300 text-slate-300'
+            }`}
+          >
+            <Armchair className="h-4 w-4" />
+          </span>
         ))}
       </div>
-      <span className="text-sm text-slate-600">
-        {occupied}/{capacity} seats taken
+      <span className="text-sm font-medium text-slate-600">
+        {occupied}/{capacity}
       </span>
     </div>
   );
