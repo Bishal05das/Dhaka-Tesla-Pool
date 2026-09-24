@@ -13,4 +13,7 @@ export const requestLogger = pinoHttp({
     return id;
   },
   autoLogging: { ignore: (req) => req.url === '/health' },
+  // The client address after proxy trust is applied: what the rate limiter keys on.
+  // Makes a wrong TRUST_PROXY visible in the logs (every request from the same proxy IP).
+  customProps: (req) => ({ clientIp: (req as { ip?: string }).ip }),
 });

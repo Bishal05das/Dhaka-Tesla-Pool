@@ -30,6 +30,12 @@ Postgres handles the MVP; Postgres row locks and constraints handle seat consist
 3. Services own database transactions. Pure domain functions (fare, state machine, matching) hold the rules
    and have no database access, so they are unit-testable.
 4. Status changes reach the screen by polling every ~5 s.
+5. A timer inside the API process expires ride requests nobody accepted within 5 minutes
+   (see [domain-rules.md § Nobody waits forever](domain-rules.md#nobody-waits-forever)).
+
+Proxies: Express trusts exactly `TRUST_PROXY` hops of `X-Forwarded-For` when working out the visitor's address
+for rate limiting. That's 2 on Vercel → Render (Vercel's edge sets the header, Render's balancer appends one
+entry) and 0 under docker compose (self-hosted Next.js doesn't add the visitor, so the header can't be trusted).
 
 ### Backend layering
 
@@ -105,7 +111,7 @@ erDiagram
         int pickup_stop_id FK
         int drop_stop_id FK
         smallint seats "CHECK 1-3"
-        enum status
+        enum status "REQUESTED..COMPLETED | CANCELLED | EXPIRED"
         enum payment_method "CASH | WALLET"
         int distance_m
         int est_solo_fare_poisha
@@ -204,8 +210,9 @@ erDiagram
 | GET | `/api/driver/history` | driver | Past pools |
 | GET | `/health` | public | Liveness + DB check |
 
-Errors: `{ "error": { "code", "message", "details" } }` — 400 validation, 401 unauthenticated,
-403 wrong role, 404 not found **or not yours**, 409 invalid transition / capacity / conflict.
+Errors: `{ "error": { "code", "message", "details" } }`: 400 validation, 401 unauthenticated,
+403 wrong role, 404 not found **or not yours**, 409 invalid transition / capacity / no Tesla available /
+insufficient balance / conflict, 429 rate limited.
 
 **Why REST:** the app is a small set of resources (rides, pools, wallet) with clear state-changing actions.
 REST maps onto that directly, is trivial to test with Supertest, and needs no extra schema tooling.
