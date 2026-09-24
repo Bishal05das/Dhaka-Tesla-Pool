@@ -28,6 +28,7 @@ export const RIDE_STATUS_LABEL: Record<RideStatus, string> = {
   STARTED: 'On the road',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
+  EXPIRED: 'Expired',
 };
 
 // What the driver reads for their trip.

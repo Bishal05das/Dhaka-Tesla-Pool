@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card, EmptyState } from '@/components/ui/Card';
+import { mmss, useCountdown } from '@/hooks/useCountdown';
 import { api, ApiError } from '@/lib/api';
 import { taka, time } from '@/lib/format';
 import type { OpenRequest } from '@/lib/types';
@@ -13,6 +14,11 @@ interface Props {
   seatsFree: number;
   isOnline: boolean;
   onAccepted: () => void;
+}
+
+function ExpiresIn({ at }: { at: string }) {
+  const left = useCountdown(at) ?? 0;
+  return <span className={left < 60 ? 'font-semibold text-red-700' : ''}>expires in {mmss(left)}</span>;
 }
 
 // Passengers waiting at the start of the line whose seats fit in the Tesla right now.
@@ -63,7 +69,7 @@ export function OpenRequests({ requests, seatsFree, isOnline, onAccepted }: Prop
                 </p>
                 <p className="text-slate-500">
                   {taka(r.estimate.pooledPoisha)}–{taka(r.estimate.soloPoisha)} · {r.paymentMethod === 'WALLET' ? 'TeslaPay' : 'Cash'} ·
-                  waiting since {time(r.requestedAt)}
+                  since {time(r.requestedAt)} · <ExpiresIn at={r.expiresAt} />
                 </p>
               </div>
               <Button

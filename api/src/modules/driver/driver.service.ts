@@ -3,6 +3,7 @@ import type { PoolStatus } from '../../generated/prisma/enums.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import { lockPool, lockVehicleOfDriver } from '../../lib/locks.js';
 import { prisma, type Tx } from '../../lib/prisma.js';
+import { expiryCutoff } from '../rides/expiry.service.js';
 import { driverPoolInclude, openRequestSelect, presentOpenRequest, presentPool } from './driver.presenter.js';
 
 export const ACTIVE_POOL_STATUSES: PoolStatus[] = ['MATCHED', 'DRIVER_ARRIVED', 'STARTED'];
@@ -18,6 +19,22 @@ export function findActivePool(db: Tx | typeof prisma, vehicleId: string) {
     where: { vehicleId, status: { in: ACTIVE_POOL_STATUSES } },
     include: driverPoolInclude,
   });
+}
+
+// The most seats any online Tesla could give a new passenger right now (0 if none), and how
+// many Teslas are online. Used to refuse a request up front instead of letting it wait for a
+// seat that doesn't exist. It's a snapshot, not a reservation: a Tesla can fill up before
+// its driver accepts, which is what the request timeout is for.
+export async function seatAvailability() {
+  const vehicles = await prisma.vehicle.findMany({
+    where: { isOnline: true },
+    select: {
+      capacity: true,
+      pools: { where: { status: { in: ACTIVE_POOL_STATUSES } }, select: { status: true, capacity: true, seatsOccupied: true } },
+    },
+  });
+  const best = Math.max(0, ...vehicles.map((v) => seatsFree(v.pools[0] ?? null, v.capacity)));
+  return { onlineTeslas: vehicles.length, maxSeatsFree: best };
 }
 
 export async function setOnline(driverId: string, online: boolean) {
@@ -53,10 +70,18 @@ export async function acceptRequest(driverId: string, rideId: string) {
     // Re-read under the lock: a passenger may have just left and freed seats.
     if (pool) pool = await tx.pool.findUniqueOrThrow({ where: { id: pool.id } });
 
-    const ride = await tx.rideRequest.findUnique({ where: { id: rideId }, select: { status: true, seats: true } });
+    const ride = await tx.rideRequest.findUnique({
+      where: { id: rideId },
+      select: { status: true, seats: true, createdAt: true },
+    });
     if (!ride) throw notFound('Ride request not found');
     if (ride.status !== 'REQUESTED') {
-      throw conflict('CONFLICT', 'This passenger is no longer waiting (already matched or cancelled)');
+      throw conflict('CONFLICT', 'This passenger is no longer waiting (already matched, cancelled or expired)');
+    }
+    // Overdue but not swept yet (the sweeper runs every few seconds): treat it as expired.
+    const cutoff = expiryCutoff();
+    if (ride.createdAt < cutoff) {
+      throw conflict('CONFLICT', 'This request has expired: the passenger waited too long');
     }
 
     assertCanJoin(pool, vehicle.capacity, ride.seats);
@@ -78,7 +103,7 @@ export async function acceptRequest(driverId: string, rideId: string) {
     }
 
     const { count } = await tx.rideRequest.updateMany({
-      where: { id: rideId, status: 'REQUESTED' },
+      where: { id: rideId, status: 'REQUESTED', createdAt: { gte: cutoff } },
       data: { status: 'MATCHED' },
     });
     if (count === 0) {
@@ -129,7 +154,8 @@ export async function listOpenRequests(driverId: string) {
     free === 0
       ? []
       : await prisma.rideRequest.findMany({
-          where: { status: 'REQUESTED', seats: { lte: free } },
+          // Overdue requests are about to be expired, so they are not offered.
+          where: { status: 'REQUESTED', seats: { lte: free }, createdAt: { gte: expiryCutoff() } },
           select: openRequestSelect,
           orderBy: { createdAt: 'asc' },
           take: 20,

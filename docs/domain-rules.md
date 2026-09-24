@@ -35,6 +35,7 @@ stateDiagram-v2
         DRIVER_ARRIVED --> STARTED: pool starts
         STARTED --> COMPLETED: pool completes
         REQUESTED --> CANCELLED
+        REQUESTED --> EXPIRED: no driver within 5 min
         MATCHED --> CANCELLED
         DRIVER_ARRIVED --> CANCELLED
     }
@@ -60,6 +61,30 @@ stateDiagram-v2
 - A driver can't go offline while they have an active pool.
 - Any transition not shown above → `409 INVALID_TRANSITION`.
 - Every transition writes a `ride_status_history` row with the actor and optional reason.
+
+## Nobody waits forever
+
+A passenger should never sit on "Waiting for a Tesla" for a seat that doesn't exist. Two rules:
+
+1. **Refused up front.** `POST /api/rides` returns `409 NO_TESLA_AVAILABLE`, and creates nothing, when:
+   - no Tesla is online,
+   - every online Tesla is full or already moving, or
+   - no online Tesla has as many free seats as requested. The response says how many are free,
+     e.g. "No Tesla has 2 free seats right now (at most 1)".
+
+   This check is a snapshot, not a reservation. A Tesla can still fill up before its driver accepts,
+   which is what rule 2 is for.
+2. **Expired after 5 minutes.** A request no driver accepts within `REQUEST_TIMEOUT_SECONDS` (default
+   300) becomes `EXPIRED`, a terminal status separate from `CANCELLED` because nobody cancelled it.
+   The passenger sees a countdown while waiting, then the reason. They can book again straight away.
+   - A sweeper inside the API process runs every 15 s. It expires overdue requests with one statement
+     (`UPDATE … WHERE status = 'REQUESTED' AND created_at < cutoff RETURNING`, feeding the history
+     insert), so the status and its history row are written together.
+   - Between sweeps the limit still holds exactly: accept refuses an overdue request, and the driver's
+     list hides it.
+   - Racing an accept is safe: whichever commits first wins, and the other's `status = 'REQUESTED'`
+     condition then matches nothing. Several API instances sweeping at once is safe for the same reason.
+   - At larger scale this timer would move to a scheduled job or a delayed queue message per request.
 
 ## Matching
 
@@ -192,5 +217,5 @@ consuming a per-area queue. Details are in the README's scaling section.
 2. There is one route line; everyone boards at its start stop.
 3. Each driver has one Tesla, each Tesla has at most one active pool, and each passenger has at most one active ride.
 4. A request is for 1–3 seats. Seats multiply the distance charge; the base fare is charged once.
-5. Requests don't expire (listed as a known limitation).
+5. A request waits at most 5 minutes for a driver, then expires.
 6. Co-riders are anonymous to each other.

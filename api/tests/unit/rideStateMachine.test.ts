@@ -9,13 +9,14 @@ import {
 import type { PoolStatus, RideStatus } from '../../src/generated/prisma/enums.js';
 import { AppError } from '../../src/lib/errors.js';
 
-const RIDE: RideStatus[] = ['REQUESTED', 'MATCHED', 'DRIVER_ARRIVED', 'STARTED', 'COMPLETED', 'CANCELLED'];
+const RIDE: RideStatus[] = ['REQUESTED', 'MATCHED', 'DRIVER_ARRIVED', 'STARTED', 'COMPLETED', 'CANCELLED', 'EXPIRED'];
 const POOL: PoolStatus[] = ['MATCHED', 'DRIVER_ARRIVED', 'STARTED', 'COMPLETED', 'CANCELLED'];
 
 // Every allowed move, written out. Anything not listed must be rejected.
 const ALLOWED_RIDE = new Set([
   'REQUESTED>MATCHED',
   'REQUESTED>CANCELLED',
+  'REQUESTED>EXPIRED',
   'MATCHED>DRIVER_ARRIVED',
   'MATCHED>CANCELLED',
   'DRIVER_ARRIVED>STARTED',
@@ -47,6 +48,10 @@ describe('ride request transitions', () => {
     }
   });
 
+  it('can only expire while still waiting for a driver', () => {
+    expect(rideStatusesAllowing('EXPIRED')).toEqual(['REQUESTED']);
+  });
+
   it('can be cancelled only before the trip starts', () => {
     expect(rideStatusesAllowing('CANCELLED')).toEqual(['REQUESTED', 'MATCHED', 'DRIVER_ARRIVED']);
   });
@@ -55,6 +60,7 @@ describe('ride request transitions', () => {
     for (const to of RIDE) {
       expect(canRideTransition('COMPLETED', to)).toBe(false);
       expect(canRideTransition('CANCELLED', to)).toBe(false);
+      expect(canRideTransition('EXPIRED', to)).toBe(false);
     }
   });
 });

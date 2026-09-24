@@ -27,6 +27,7 @@ enum RideStatus {
   STARTED
   COMPLETED
   CANCELLED
+  EXPIRED // no driver accepted it in time; set by the system, not by a person
 }
 
 enum PoolStatus {

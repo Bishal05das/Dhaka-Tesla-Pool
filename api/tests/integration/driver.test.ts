@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { signInAs } from '../helpers/auth.js';
 import { resetDatabase } from '../helpers/db.js';
-import { putInBulletsPool } from '../helpers/pools.js';
+import { bulletOnline, putInBulletsPool } from '../helpers/pools.js';
 import { stopIds } from '../helpers/stops.js';
 
 const app = createApp();
@@ -12,7 +12,10 @@ beforeAll(async () => {
   await resetDatabase();
   stopId = await stopIds();
 });
-beforeEach(resetDatabase);
+beforeEach(async () => {
+  await resetDatabase();
+  await bulletOnline();
+});
 
 async function requestRide(who: 'nusrat' | 'rafiq' | 'shirin', drop: string, seats = 1) {
   const agent = await signInAs(app, who);
@@ -61,10 +64,12 @@ describe('open requests', () => {
   });
 
   it('hides requests that need more seats than Bullet has left', async () => {
-    // Rafiq has 2 of Bullet's 3 seats, so only 1-seat requests fit.
-    await putInBulletsPool([await requestRide('rafiq', 'Gulshan 1', 2)]);
+    // All three booked while Bullet was empty; then Rafiq takes 2 of its 3 seats,
+    // so only 1-seat requests still fit.
+    const rafiq = await requestRide('rafiq', 'Gulshan 1', 2);
     await requestRide('nusrat', 'Mohakhali', 1);
     await requestRide('shirin', 'Gulshan 2', 2);
+    await putInBulletsPool([rafiq]);
 
     const jashim = await signInAs(app, 'jashim');
     const res = await jashim.get('/api/driver/requests');
@@ -74,8 +79,9 @@ describe('open requests', () => {
   });
 
   it('shows nothing once the trip has started', async () => {
-    await putInBulletsPool([await requestRide('rafiq', 'Gulshan 1')], 'STARTED');
+    const rafiq = await requestRide('rafiq', 'Gulshan 1');
     await requestRide('nusrat', 'Mohakhali');
+    await putInBulletsPool([rafiq], 'STARTED');
 
     const jashim = await signInAs(app, 'jashim');
     expect((await jashim.get('/api/driver/requests')).body).toMatchObject({ seatsFree: 0, requests: [] });

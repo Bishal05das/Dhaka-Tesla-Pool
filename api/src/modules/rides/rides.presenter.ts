@@ -1,6 +1,7 @@
 // Shapes a ride for the passenger who owns it. Deliberately leaves out everything about other
 // passengers: co-riders appear only as a count, never with names, stops or fares.
 import type { Prisma } from '../../generated/prisma/client.js';
+import { expiresAt } from './expiry.service.js';
 
 export const passengerRideInclude = {
   pickupStop: { select: { id: true, name: true } },
@@ -63,6 +64,8 @@ export function presentRide(ride: RideRow) {
         }
       : null,
     cancelReason: ride.cancelReason,
+    // While waiting for a driver: when the request gives up (the passenger sees a countdown).
+    expiresAt: ride.status === 'REQUESTED' ? expiresAt(ride.createdAt) : null,
     createdAt: ride.createdAt,
     updatedAt: ride.updatedAt,
   };

@@ -1,6 +1,11 @@
 import type { PoolStatus, RideStatus } from '../../src/generated/prisma/enums.js';
 import { prisma } from '../../src/lib/prisma.js';
 
+// Requests are refused while no Tesla is online, so most tests start with Jashim online.
+export async function bulletOnline(online = true) {
+  await prisma.vehicle.update({ where: { plate: 'DHAKA-TESLA-11' }, data: { isOnline: online } });
+}
+
 // Puts existing ride requests straight into a pool on Bullet, bypassing the driver API.
 // For testing passenger-side rules (like cancelling) in isolation from the driver flow.
 export async function putInBulletsPool(rideIds: string[], status: PoolStatus = 'MATCHED') {

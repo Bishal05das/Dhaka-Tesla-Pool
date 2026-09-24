@@ -6,6 +6,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Field } from '@/components/ui/Field';
+import { mmss, useCountdown } from '@/hooks/useCountdown';
 import { api, ApiError } from '@/lib/api';
 import { RIDE_STATUS_LABEL, taka } from '@/lib/format';
 import type { Ride, RideStatus } from '@/lib/types';
@@ -24,6 +25,7 @@ export function ActiveRideCard({ ride, onChanged }: { ride: Ride; onChanged: () 
       }
     >
       <StatusSteps status={ride.status} />
+      {ride.status === 'REQUESTED' && <WaitingCountdown expiresAt={ride.expiresAt} />}
 
       <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
         <Item label="Trip">
@@ -72,6 +74,24 @@ export function ActiveRideCard({ ride, onChanged }: { ride: Ride; onChanged: () 
         <p className="mt-4 text-sm text-slate-500">You&apos;re on the road. Rides can&apos;t be cancelled once they start.</p>
       )}
     </Card>
+  );
+}
+
+// Nobody waits forever: the request gives up after 5 minutes without a driver.
+function WaitingCountdown({ expiresAt }: { expiresAt: string | null }) {
+  const left = useCountdown(expiresAt);
+  if (left === null) return null;
+  return (
+    <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+      {left > 0 ? (
+        <>
+          Waiting for a driver to accept. If nobody does within <strong>{mmss(left)}</strong>, we&apos;ll cancel the
+          request so you&apos;re not stuck waiting.
+        </>
+      ) : (
+        'No driver accepted in time. Closing this request…'
+      )}
+    </p>
   );
 }
 

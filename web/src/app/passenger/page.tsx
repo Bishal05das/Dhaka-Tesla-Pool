@@ -39,7 +39,12 @@ export default function PassengerHome() {
         <ActiveRideCard ride={active} onChanged={rides.reload} />
       ) : (
         <>
-          {last && (
+          {last?.status === 'EXPIRED' && (
+            <Alert tone="info">
+              Your last request ({last.pickup.name} → {last.drop.name}) expired: {last.cancelReason}
+            </Alert>
+          )}
+          {last && last.status !== 'EXPIRED' && (
             <Link
               href={`/passenger/rides/${last.id}`}
               className="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm ring-1 ring-slate-200 hover:bg-slate-50"

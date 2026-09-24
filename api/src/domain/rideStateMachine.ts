@@ -7,12 +7,14 @@ import type { PoolStatus, RideStatus } from '../generated/prisma/enums.js';
 import { conflict } from '../lib/errors.js';
 
 const RIDE_TRANSITIONS: Record<RideStatus, readonly RideStatus[]> = {
-  REQUESTED: ['MATCHED', 'CANCELLED'],
+  // EXPIRED: nobody accepted it within the waiting limit (set by the system).
+  REQUESTED: ['MATCHED', 'CANCELLED', 'EXPIRED'],
   MATCHED: ['DRIVER_ARRIVED', 'CANCELLED'],
   DRIVER_ARRIVED: ['STARTED', 'CANCELLED'],
   STARTED: ['COMPLETED'], // no cancelling once the Tesla is moving
   COMPLETED: [],
   CANCELLED: [],
+  EXPIRED: [],
 };
 
 const POOL_TRANSITIONS: Record<PoolStatus, readonly PoolStatus[]> = {
