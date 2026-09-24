@@ -2,8 +2,8 @@
 // All money is integer poisha (৳1 = 100 poisha).
 
 export type Role = 'PASSENGER' | 'DRIVER';
-export type RideStatus = 'REQUESTED' | 'MATCHED' | 'DRIVER_ARRIVED' | 'STARTED' | 'COMPLETED' | 'CANCELLED';
-export type PoolStatus = Exclude<RideStatus, 'REQUESTED'>;
+export type RideStatus = 'REQUESTED' | 'MATCHED' | 'DRIVER_ARRIVED' | 'STARTED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
+export type PoolStatus = Exclude<RideStatus, 'REQUESTED' | 'EXPIRED'>;
 export type PaymentMethod = 'CASH' | 'WALLET';
 
 export interface Vehicle {
@@ -68,6 +68,8 @@ export interface Ride {
     coRiders: number;
   } | null;
   cancelReason: string | null;
+  // While waiting for a driver: when the request gives up. Null otherwise.
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +100,7 @@ export interface OpenRequest {
   paymentMethod: PaymentMethod;
   estimate: { soloPoisha: number; pooledPoisha: number };
   requestedAt: string;
+  expiresAt: string;
 }
 
 export interface PoolPassenger {
