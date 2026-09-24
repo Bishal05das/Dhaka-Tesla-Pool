@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* System fonts: nothing to download at build time, so the Docker build works offline. */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Bengali", sans-serif;
+}
