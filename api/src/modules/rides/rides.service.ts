@@ -3,6 +3,7 @@ import { conflict, notFound } from '../../lib/errors.js';
 import { lockPool } from '../../lib/locks.js';
 import { prisma, type Tx } from '../../lib/prisma.js';
 import { violatedUniqueIndex } from '../../lib/prismaErrors.js';
+import { seatAvailability } from '../driver/driver.service.js';
 import { quoteTrip } from '../fares/fares.service.js';
 import {
   passengerRideDetailInclude,
@@ -14,6 +15,21 @@ import type { RequestRideInput } from './rides.schemas.js';
 
 export async function requestRide(passengerId: string, input: RequestRideInput) {
   const { trip, estimate } = await quoteTrip(input);
+
+  // Don't let a passenger wait for a seat no Tesla has: say so now, and create nothing.
+  const { onlineTeslas, maxSeatsFree } = await seatAvailability();
+  if (onlineTeslas === 0) {
+    throw conflict('NO_TESLA_AVAILABLE', 'No Tesla is online right now. Please try again in a few minutes.');
+  }
+  if (maxSeatsFree < trip.seats) {
+    throw conflict(
+      'NO_TESLA_AVAILABLE',
+      maxSeatsFree === 0
+        ? 'Every Tesla is full right now. Please try again in a few minutes.'
+        : `No Tesla has ${trip.seats} free seats right now (at most ${maxSeatsFree}). Try fewer seats or wait a few minutes.`,
+      { seatsRequested: trip.seats, maxSeatsFree },
+    );
+  }
 
   if (input.paymentMethod === 'WALLET') {
     // The solo fare is the most this ride can cost, so it's what the balance must cover.

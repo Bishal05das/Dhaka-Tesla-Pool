@@ -102,8 +102,8 @@ describe('the 8:41 AM Banani story', () => {
 
 describe('when accepting is refused', () => {
   it('while Jashim is offline', async () => {
-    await jashim.patch('/api/driver/status').send({ online: false });
     const nusrat = await requestRide('nusrat', 'Mohakhali');
+    await jashim.patch('/api/driver/status').send({ online: false });
     expect((await accept(nusrat.id)).status).toBe(409);
   });
 
@@ -123,10 +123,10 @@ describe('when accepting is refused', () => {
 
   it('once the trip has started', async () => {
     const nusrat = await requestRide('nusrat', 'Mohakhali');
+    const rafiq = await requestRide('rafiq', 'Gulshan 1');
     const { body } = await accept(nusrat.id);
     await prisma.pool.update({ where: { id: body.pool.id }, data: { status: 'STARTED' } });
 
-    const rafiq = await requestRide('rafiq', 'Gulshan 1');
     const res = await accept(rafiq.id);
     expect(res.status).toBe(409);
     expect(res.body.error.message).toMatch(/already started/);

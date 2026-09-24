@@ -20,6 +20,22 @@ export function findActivePool(db: Tx | typeof prisma, vehicleId: string) {
   });
 }
 
+// The most seats any online Tesla could give a new passenger right now (0 if none), and how
+// many Teslas are online. Used to refuse a request up front instead of letting it wait for a
+// seat that doesn't exist. It's a snapshot, not a reservation: a Tesla can fill up before
+// its driver accepts, which is what the request timeout is for.
+export async function seatAvailability() {
+  const vehicles = await prisma.vehicle.findMany({
+    where: { isOnline: true },
+    select: {
+      capacity: true,
+      pools: { where: { status: { in: ACTIVE_POOL_STATUSES } }, select: { status: true, capacity: true, seatsOccupied: true } },
+    },
+  });
+  const best = Math.max(0, ...vehicles.map((v) => seatsFree(v.pools[0] ?? null, v.capacity)));
+  return { onlineTeslas: vehicles.length, maxSeatsFree: best };
+}
+
 export async function setOnline(driverId: string, online: boolean) {
   return prisma.$transaction(async (tx) => {
     const vehicle = await lockVehicleOfDriver(tx, driverId);

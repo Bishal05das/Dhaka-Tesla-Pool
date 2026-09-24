@@ -3,13 +3,16 @@ import { createApp } from '../../src/app.js';
 import { prisma } from '../../src/lib/prisma.js';
 import { signInAs } from '../helpers/auth.js';
 import { resetDatabase } from '../helpers/db.js';
-import { putInBulletsPool } from '../helpers/pools.js';
+import { bulletOnline, putInBulletsPool } from '../helpers/pools.js';
 import { stopIds } from '../helpers/stops.js';
 
 const app = createApp();
 let stopId: Awaited<ReturnType<typeof stopIds>>;
 
-beforeEach(resetDatabase);
+beforeEach(async () => {
+  await resetDatabase();
+  await bulletOnline();
+});
 beforeAll(async () => {
   await resetDatabase();
   stopId = await stopIds();
@@ -92,6 +95,54 @@ describe('requesting a ride', () => {
   it('is for passengers only', async () => {
     const jashim = await signInAs(app, 'jashim');
     expect((await jashim.post('/api/rides').send(trip('Mohakhali'))).status).toBe(403);
+  });
+});
+
+describe("refusing a request no Tesla can take, instead of letting it wait", () => {
+  it('when no Tesla is online', async () => {
+    await bulletOnline(false);
+    const shirin = await signInAs(app, 'shirin');
+    const res = await shirin.post('/api/rides').send(trip('Gulshan 2'));
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatchObject({ code: 'NO_TESLA_AVAILABLE', message: expect.stringMatching(/online/) });
+    expect(await prisma.rideRequest.count({ where: { status: 'REQUESTED' } })).toBe(0);
+  });
+
+  it("when Bullet's 3 seats are all taken", async () => {
+    const nusrat = await signInAs(app, 'nusrat');
+    const rafiq = await signInAs(app, 'rafiq');
+    const n = (await nusrat.post('/api/rides').send(trip('Mohakhali'))).body.ride;
+    const r = (await rafiq.post('/api/rides').send(trip('Gulshan 1', { seats: 2 }))).body.ride;
+    await putInBulletsPool([n.id, r.id]);
+
+    const shirin = await signInAs(app, 'shirin');
+    const res = await shirin.post('/api/rides').send(trip('Gulshan 2'));
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).toMatch(/full/);
+  });
+
+  it('when she asks for more seats than any Tesla has left, saying how many are free', async () => {
+    const rafiq = await signInAs(app, 'rafiq');
+    const r = (await rafiq.post('/api/rides').send(trip('Gulshan 1', { seats: 2 }))).body.ride;
+    await putInBulletsPool([r.id]);
+
+    const shirin = await signInAs(app, 'shirin');
+    const tooMany = await shirin.post('/api/rides').send(trip('Gulshan 2', { seats: 2 }));
+    expect(tooMany.status).toBe(409);
+    expect(tooMany.body.error.details).toEqual({ seatsRequested: 2, maxSeatsFree: 1 });
+
+    // One seat still fits.
+    await shirin.post('/api/rides').send(trip('Gulshan 2', { seats: 1 })).expect(201);
+  });
+
+  it('when the only Tesla has already started its trip', async () => {
+    const rafiq = await signInAs(app, 'rafiq');
+    const r = (await rafiq.post('/api/rides').send(trip('Gulshan 1'))).body.ride;
+    await putInBulletsPool([r.id], 'STARTED');
+
+    const nusrat = await signInAs(app, 'nusrat');
+    expect((await nusrat.post('/api/rides').send(trip('Mohakhali'))).body.error.code).toBe('NO_TESLA_AVAILABLE');
   });
 });
 
