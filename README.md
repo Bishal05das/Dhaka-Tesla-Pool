@@ -19,10 +19,12 @@ credentials. On startup the API applies migrations and seeds the route stops and
 
 | Service | URL |
 |---|---|
+| **Web app** | **http://localhost:3000** (sign in as Nusrat, Rafiq, Shirin or Jashim, password `tesla1234`) |
 | API | http://localhost:4000 (health: `/health`) |
 | Postgres | `localhost:5440` (user/password/db: `tesla` / `tesla` / `dhaka_tesla`) |
 
-Reset all data: `docker compose down -v`.
+Port already taken? Set `WEB_HOST_PORT`, `API_HOST_PORT` or `DB_HOST_PORT` in `.env`
+(for example `WEB_HOST_PORT=3001`). Reset all data: `docker compose down -v`.
 
 ## Local development (API)
 
@@ -37,6 +39,15 @@ npm run db:migrate               # apply migrations
 npm run db:seed                  # seed stops + cast
 npm run dev                      # http://localhost:4000
 npm test
+```
+
+Web app (in another terminal):
+
+```bash
+cd web
+cp .env.example .env.local       # API_INTERNAL_URL=http://localhost:4000
+npm install
+npm run dev                      # http://localhost:3000
 ```
 
 `npm test` needs the compose Postgres running. It creates and migrates a separate `dhaka_tesla_test`

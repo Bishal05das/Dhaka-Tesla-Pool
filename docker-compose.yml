@@ -43,5 +43,19 @@ services:
     ports:
       - "${API_HOST_PORT:-4000}:4000"
 
+  web:
+    build:
+      context: ./web
+      args:
+        # The browser never calls the API directly: Next.js forwards /api/* to it over the
+        # compose network, so the session cookie stays first-party.
+        API_INTERNAL_URL: http://api:4000
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_HOST_PORT:-3000}:3000"
+
 volumes:
   db-data:
