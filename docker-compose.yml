@@ -39,6 +39,9 @@ services:
       # Compose serves plain http, where browsers drop Secure cookies.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-20}
+      # The web container forwards /api but, self-hosted, Next.js doesn't add the visitor's
+      # address to X-Forwarded-For. Trust nothing, so a client can't fake its address.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
       REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-300}
       SEED_ON_START: ${SEED_ON_START:-true}
     ports:

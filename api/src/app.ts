@@ -17,9 +17,10 @@ import { walletRouter } from './modules/wallet/wallet.routes.js';
 export function createApp(): Express {
   const app = express();
 
-  // Render/Vercel sit in front of the API; trust one proxy hop so req.ip and
-  // req.secure reflect the real client (needed for rate limiting and secure cookies).
-  app.set('trust proxy', 1);
+  // Proxies sit in front of the API (Next.js locally; Vercel and Render in production). Trust
+  // exactly that many hops so req.ip is the visitor: trusting too few rate-limits everyone as
+  // one proxy address; trusting too many lets a client spoof its address.
+  app.set('trust proxy', env.TRUST_PROXY);
   app.disable('x-powered-by');
 
   app.use(requestLogger);

@@ -21,6 +21,13 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true')),
+  // Proxy hops in front of the API whose X-Forwarded-For entries we trust, so req.ip (used by
+  // the login rate limit) is the visitor, not a proxy.
+  //   Vercel -> Render: 2. Vercel's edge overwrites X-Forwarded-For with the visitor's address
+  //     (so it can't be faked) and Render's load balancer appends Vercel's.
+  //   docker compose: 0. Self-hosted Next.js forwards /api without adding the visitor's address,
+  //     so any X-Forwarded-For would come from the client itself and must not be trusted.
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
   // How long a ride request waits for a driver before it expires, and how often we check.
   REQUEST_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
   EXPIRY_SWEEP_SECONDS: z.coerce.number().int().positive().default(15),
