@@ -2,13 +2,17 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { prisma } from './lib/prisma.js';
+import { startExpirySweeper } from './modules/rides/expiry.service.js';
 
 const server = createApp().listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API listening');
 });
 
+const stopSweeper = startExpirySweeper();
+
 function shutdown(signal: string) {
   logger.info({ signal }, 'Shutting down');
+  stopSweeper();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);

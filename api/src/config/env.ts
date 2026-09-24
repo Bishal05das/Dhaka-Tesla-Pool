@@ -21,6 +21,9 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true')),
+  // How long a ride request waits for a driver before it expires, and how often we check.
+  REQUEST_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
+  EXPIRY_SWEEP_SECONDS: z.coerce.number().int().positive().default(15),
   // Sign-up + login attempts allowed per IP per 15 minutes.
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),

@@ -1,5 +1,6 @@
 // What Jashim sees: who is riding, how many seats, and where each passenger gets off.
 import type { Prisma } from '../../generated/prisma/client.js';
+import { expiresAt } from '../rides/expiry.service.js';
 
 export const driverPoolInclude = {
   members: {
@@ -85,5 +86,6 @@ export function presentOpenRequest(r: OpenRequestRow) {
     paymentMethod: r.paymentMethod,
     estimate: { soloPoisha: r.estSoloFarePoisha, pooledPoisha: r.estPooledFarePoisha },
     requestedAt: r.createdAt,
+    expiresAt: expiresAt(r.createdAt),
   };
 }
