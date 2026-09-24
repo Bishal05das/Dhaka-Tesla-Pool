@@ -63,7 +63,7 @@ export function ActiveRideCard({ ride, stops, onChanged }: { ride: Ride; stops: 
                     : `Driving you to ${ride.drop.name}`}
               </p>
             </div>
-            <span className="rounded-lg bg-white/10 px-2.5 py-1 font-mono text-sm tracking-wider">{ride.tesla.plate}</span>
+            <span className="hidden rounded-lg bg-white/10 px-2.5 py-1 font-mono text-sm tracking-wider sm:inline">{ride.tesla.plate}</span>
           </div>
         )}
 
