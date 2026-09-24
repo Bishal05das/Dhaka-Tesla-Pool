@@ -1,10 +1,11 @@
 import { Zap } from 'lucide-react';
 
 // The mark: a lightning bolt for the (battery-powered, entirely unaffiliated) "Tesla".
-export function LogoMark({ className = 'h-9 w-9' }: { className?: string }) {
+export function LogoMark({ className = 'h-9 w-9', onDark = false }: { className?: string; onDark?: boolean }) {
+  const colours = onDark ? 'bg-white/15 text-white' : 'bg-linear-to-br from-emerald-500 to-teal-700 text-white shadow-sm';
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-sm ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-xl ${colours} ${className}`}
       aria-hidden
     >
       <Zap className="h-1/2 w-1/2" fill="currentColor" strokeWidth={1.5} />
