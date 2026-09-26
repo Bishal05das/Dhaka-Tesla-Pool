@@ -13,7 +13,17 @@ export const requestLogger = pinoHttp({
     return id;
   },
   autoLogging: { ignore: (req) => req.url === '/health' },
-  // The client address after proxy trust is applied: what the rate limiter keys on.
-  // Makes a wrong TRUST_PROXY visible in the logs (every request from the same proxy IP).
-  customProps: (req) => ({ clientIp: (req as { ip?: string }).ip }),
+  // clientIp is the address after proxy trust is applied: what the rate limiter keys on.
+  // `forwarded` is the raw chain the proxies sent, so TRUST_PROXY can be set from what the
+  // hosting platform actually does rather than from assumptions (see README, Deployment).
+  customProps: (req) => ({
+    clientIp: (req as { ip?: string }).ip,
+    forwarded: {
+      xff: req.headers['x-forwarded-for'],
+      realIp: req.headers['x-real-ip'],
+      cfConnectingIp: req.headers['cf-connecting-ip'],
+      trueClientIp: req.headers['true-client-ip'],
+      socket: req.socket.remoteAddress,
+    },
+  }),
 });
