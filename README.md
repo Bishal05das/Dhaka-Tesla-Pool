@@ -505,8 +505,6 @@ Reasoning for 1M passengers and 100k drivers: [docs/scaling.md](docs/scaling.md)
 
 ## AI usage
 
-_Draft for the author to review and put in their own words._
-
 **Tools:** Claude Code (Anthropic), used throughout: turning the brief into a plan, and asking clarifying
 questions before any code; designing the schema, state machines and locking; writing code and tests; checking
 the UI in headless Chrome; and drafting this README. Every design decision was confirmed by me, and the
