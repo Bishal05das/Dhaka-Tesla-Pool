@@ -10,7 +10,7 @@ fare, 25% cheaper on distance when they share.
 |---|---|
 | **Live app** | https://dhaka-tesla-pool-7eai2wxhp-tesla-080d.vercel.app |
 | **Live API** | https://dhaka-tesla-api.onrender.com ([`/health`](https://dhaka-tesla-api.onrender.com/health)) |
-| **Demo video** | _link added after recording_ |
+| **Demo video** | **https://youtu.be/mBr3ggwr4QQ** (6 min: the problem, how it was engineered, product tour) |
 | **Demo logins** | `nusrat@`, `rafiq@`, `shirin@` (passengers) and `jashim@` (driver of Bullet) `dhakatesla.test`, password `tesla1234`, or tap a name on the sign-in page |
 
 > The API runs on Render's free tier and **sleeps after 15 minutes idle**. The first request after that takes
